@@ -1,7 +1,9 @@
 // シフト調整・自動編成アプリ (Hoa Hoa / guu table / GALLERY)
 const STORAGE_KEY = "shift_manager_v4_data";
+const MONTH_STORAGE_KEY = "shift_manager_v4_month";
 const SHARED_ACCESS_KEY = "hhgt_8x9k2m4p7w3q";
 const ACCESS_TOKEN_STORAGE_KEY = "shift_manager_access_key";
+const CLOUD_SYNC_URL = "https://api.restful-api.dev/objects/ff808181a09d98f701a1774f44611125";
 
 // 営業時間
 // Hoa Hoa / guu table : 10:00 - 23:00
@@ -36,6 +38,12 @@ let state = {
 };
 
 function getInitialMonth() {
+  try {
+    const savedMonth = localStorage.getItem(MONTH_STORAGE_KEY);
+    if (savedMonth && /^\d{4}-\d{2}$/.test(savedMonth)) {
+      return savedMonth;
+    }
+  } catch (e) {}
   const now = new Date();
   const y = now.getFullYear();
   const m = String(now.getMonth() + 1).padStart(2, "0");
@@ -235,39 +243,78 @@ function getShareableUrl() {
   return url.toString();
 }
 
-// ローカルストレージ保存＆共有サーバー保存
+let isSavingToCloud = false;
+
+// ローカルストレージ保存＆クラウド共通データベースへ即時保存
 function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state.shifts));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.shifts));
+    localStorage.setItem(MONTH_STORAGE_KEY, state.currentMonth);
+  } catch (e) {}
   saveToServer();
 }
 
 async function saveToServer() {
+  isSavingToCloud = true;
+  const badge = document.getElementById("syncStatusBadge");
+  if (badge) badge.textContent = "🔄 データを自動保存中...";
+
+  const payloadData = {
+    shifts: state.shifts,
+    currentMonth: state.currentMonth,
+    updatedAt: new Date().toISOString()
+  };
+
+  let savedOk = false;
+
+  // 1. クラウド共通データベースへ保存（GitHub Pages・スマホ・PCすべてで共有永続化）
   try {
-    const res = await fetch(`/api/shifts?key=${encodeURIComponent(SHARED_ACCESS_KEY)}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-access-key": SHARED_ACCESS_KEY
-      },
-      body: JSON.stringify({ shifts: state.shifts })
+    const cloudRes = await fetch(CLOUD_SYNC_URL, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "mimimi_shifts",
+        data: payloadData
+      })
     });
-    if (res.ok) {
-      updateSyncStatusBadge(true);
+    if (cloudRes.ok) {
+      savedOk = true;
     }
   } catch (e) {
-    // 静的ホスティングのみの場合などはローカル保存のみで動作
+    // クラウド通信エラー時は後続またはローカル保存でカバー
   }
+
+  // 2. ローカルまたはNodeサーバー稼働時は /api/shifts にも保存
+  try {
+    if (
+      window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1"
+    ) {
+      const localRes = await fetch(`/api/shifts?key=${encodeURIComponent(SHARED_ACCESS_KEY)}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-access-key": SHARED_ACCESS_KEY
+        },
+        body: JSON.stringify({ shifts: state.shifts })
+      });
+      if (localRes.ok) savedOk = true;
+    }
+  } catch (e) {}
+
+  isSavingToCloud = false;
+  updateSyncStatusBadge(savedOk);
 }
 
 function loadState() {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved) {
-    try {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
       state.shifts = JSON.parse(saved);
       normalizeLoadedShifts(state.shifts);
-    } catch (e) {
-      state.shifts = [];
     }
+  } catch (e) {
+    state.shifts = [];
   }
 }
 
@@ -281,31 +328,103 @@ function normalizeLoadedShifts(shiftsArray) {
 }
 
 async function syncFromServer(isInitial = false) {
+  if (isSavingToCloud) return;
+
+  let remoteShifts = null;
+  let remoteMonth = null;
+
+  // 1. まずクラウド共通データベースから最新データを取得
   try {
-    const res = await fetch(`/api/shifts?key=${encodeURIComponent(SHARED_ACCESS_KEY)}`, {
-      headers: { "x-access-key": SHARED_ACCESS_KEY },
-      cache: "no-store"
-    });
-    if (!res.ok) return;
-    const data = await res.json();
-    if (Array.isArray(data.shifts)) {
-      updateSyncStatusBadge(true);
-      // 初回起動時、サーバー側が空で手元のブラウザにデータがある場合はサーバーへ初期アップロード
-      if (isInitial && data.shifts.length === 0 && state.shifts.length > 0) {
-        await saveToServer();
-        return;
-      }
-      const serverJson = JSON.stringify(data.shifts);
-      const currentJson = JSON.stringify(state.shifts);
-      if (serverJson !== currentJson) {
-        state.shifts = data.shifts;
-        normalizeLoadedShifts(state.shifts);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state.shifts));
-        renderAll();
+    const cloudRes = await fetch(CLOUD_SYNC_URL, { cache: "no-store" });
+    if (cloudRes.ok) {
+      const cloudObj = await cloudRes.json();
+      if (cloudObj && cloudObj.data && Array.isArray(cloudObj.data.shifts)) {
+        remoteShifts = cloudObj.data.shifts;
+        remoteMonth = cloudObj.data.currentMonth || null;
       }
     }
-  } catch (e) {
-    // サーバーAPIがない環境ではスキップ
+  } catch (e) {}
+
+  // 2. もしクラウドから取得できずローカルサーバー環境なら /api/shifts から取得
+  if (
+    remoteShifts === null &&
+    (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
+  ) {
+    try {
+      const res = await fetch(`/api/shifts?key=${encodeURIComponent(SHARED_ACCESS_KEY)}`, {
+        headers: { "x-access-key": SHARED_ACCESS_KEY },
+        cache: "no-store"
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.shifts)) {
+          remoteShifts = data.shifts;
+        }
+      }
+    } catch (e) {}
+  }
+
+  if (!Array.isArray(remoteShifts)) return;
+
+  updateSyncStatusBadge(true);
+
+  if (isInitial) {
+    // 初回起動時：クラウド側が空で手元の端末にデータがある場合はクラウドへアップロード
+    if (remoteShifts.length === 0 && state.shifts.length > 0) {
+      await saveToServer();
+      return;
+    }
+    // 初回起動時：クラウドにデータがあり、手元にも未同期データがある場合はID基準で統合
+    if (remoteShifts.length > 0 && state.shifts.length > 0) {
+      const mergedMap = new Map();
+      remoteShifts.forEach((s) => mergedMap.set(s.id, s));
+      let hasLocalOnly = false;
+      state.shifts.forEach((s) => {
+        if (!mergedMap.has(s.id)) {
+          mergedMap.set(s.id, s);
+          hasLocalOnly = true;
+        }
+      });
+      state.shifts = Array.from(mergedMap.values());
+      normalizeLoadedShifts(state.shifts);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.shifts));
+      if (hasLocalOnly) {
+        await saveToServer();
+      }
+    } else if (remoteShifts.length > 0) {
+      state.shifts = remoteShifts;
+      normalizeLoadedShifts(state.shifts);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.shifts));
+    }
+
+    // 表示中の月にシフトが0件で、クラウド上の最新月または他月にシフトがある場合はその月を表示
+    const hasShiftsInCurrentMonth = state.shifts.some((s) =>
+      s.date.startsWith(state.currentMonth)
+    );
+    if (!hasShiftsInCurrentMonth && state.shifts.length > 0) {
+      if (remoteMonth && state.shifts.some((s) => s.date.startsWith(remoteMonth))) {
+        state.currentMonth = remoteMonth;
+      } else {
+        const latestDate = [...state.shifts].map((s) => s.date).sort()[0];
+        if (latestDate) {
+          state.currentMonth = latestDate.slice(0, 7);
+        }
+      }
+      localStorage.setItem(MONTH_STORAGE_KEY, state.currentMonth);
+      syncMonthDefaults();
+    }
+    renderAll();
+    return;
+  }
+
+  // 定期同期時：クラウド側のデータに変化があれば画面へ反映
+  const serverJson = JSON.stringify(remoteShifts);
+  const currentJson = JSON.stringify(state.shifts);
+  if (serverJson !== currentJson) {
+    state.shifts = remoteShifts;
+    normalizeLoadedShifts(state.shifts);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.shifts));
+    renderAll();
   }
 }
 
@@ -313,9 +432,9 @@ function updateSyncStatusBadge(isServerConnected) {
   const badge = document.getElementById("syncStatusBadge");
   if (!badge) return;
   if (isServerConnected) {
-    badge.textContent = "🟢 共有URL限定・リアルタイム同期中";
+    badge.textContent = "🟢 自動保存済み（全端末で共有中）";
   } else {
-    badge.textContent = "🔒 専用URL限定";
+    badge.textContent = "💾 この端末に自動保存済み";
   }
 }
 
@@ -378,10 +497,15 @@ document.addEventListener("DOMContentLoaded", async () => {
   syncMonthDefaults();
   renderAll();
 
-  // サーバー上の共有データと同期（初回＋10秒おき＋画面復帰時）
+  // クラウド上の共有データと同期（初回＋8秒おき＋画面復帰時）
   await syncFromServer(true);
-  setInterval(() => syncFromServer(false), 10000);
+  setInterval(() => syncFromServer(false), 8000);
   window.addEventListener("focus", () => syncFromServer(false));
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      syncFromServer(false);
+    }
+  });
 });
 
 function initTimeSelects() {
@@ -425,6 +549,9 @@ function initTimeSelects() {
 function syncMonthDefaults() {
   const monthInput = document.getElementById("targetMonthInput");
   monthInput.value = state.currentMonth;
+  try {
+    localStorage.setItem(MONTH_STORAGE_KEY, state.currentMonth);
+  } catch (e) {}
 
   const defaultDate = `${state.currentMonth}-01`;
   document.getElementById("shiftDateInput").value = defaultDate;
