@@ -221,47 +221,17 @@ function ensureLateShiftSupportForDate(dateStr) {
   return false;
 }
 
-// 専用URL（トークン付きURL）のアクセス権限チェック
+// URLを知っている人はそのまま開けるように許可（検索エンジン除け meta noindex で保護）
 function checkAccessGate() {
-  const params = new URLSearchParams(window.location.search);
-  const urlKey = params.get("key");
-  const savedKey = localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY);
-  const isLocal =
-    window.location.hostname === "localhost" ||
-    window.location.hostname === "127.0.0.1";
-
-  if (urlKey === SHARED_ACCESS_KEY) {
-    localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, SHARED_ACCESS_KEY);
-    return true;
-  }
-
-  if (isLocal) {
-    // 管理者ローカル環境では自動的に専用URLパラメータを付与して許可
-    localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, SHARED_ACCESS_KEY);
-    const newUrl = new URL(window.location.href);
-    newUrl.searchParams.set("key", SHARED_ACCESS_KEY);
-    window.history.replaceState({}, "", newUrl.toString());
-    return true;
-  }
-
-  if (savedKey === SHARED_ACCESS_KEY) {
-    // 一度専用URLからアクセス済みの端末はそのまま利用可能＆URLにもトークンを復元
-    const newUrl = new URL(window.location.href);
-    newUrl.searchParams.set("key", SHARED_ACCESS_KEY);
-    window.history.replaceState({}, "", newUrl.toString());
-    return true;
-  }
-
-  // 専用URL以外からのアクセスをブロック
   const overlay = document.getElementById("accessGateOverlay");
-  if (overlay) overlay.classList.remove("hidden");
-  return false;
+  if (overlay) overlay.classList.add("hidden");
+  return true;
 }
 
-// LINE共有用の専用URLを取得
+// LINE共有用のURLを取得
 function getShareableUrl() {
   const url = new URL(window.location.href);
-  url.searchParams.set("key", SHARED_ACCESS_KEY);
+  url.searchParams.delete("key");
   return url.toString();
 }
 
