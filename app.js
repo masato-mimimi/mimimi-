@@ -627,20 +627,6 @@ function initControls() {
     });
   });
 
-  // スマホ用カレンダー表示切替（縦リスト / 7列カレンダー）
-  document.querySelectorAll(".mobile-cal-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      document.querySelectorAll(".mobile-cal-btn").forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
-      const wrapper = document.getElementById("calendarScrollWrapper");
-      if (wrapper) {
-        const mode = btn.dataset.calMode;
-        wrapper.classList.toggle("mobile-list-mode", mode === "list");
-        wrapper.classList.toggle("mobile-grid-mode", mode === "grid");
-      }
-    });
-  });
-
   // 店舗フィルタ
   document.getElementById("shopFilterSelect").addEventListener("change", (e) => {
     state.shopFilter = e.target.value;
@@ -1188,9 +1174,9 @@ function renderCalendar() {
       .join("");
 
     html += `
-      <div class="calendar-cell ${dayShifts.length === 0 ? "no-shifts" : ""}" data-date="${dateStr}">
+      <div class="calendar-cell" data-date="${dateStr}">
         <div class="cell-header">
-          <span class="day-number ${dowClass}" data-jump-date="${dateStr}" title="日別タイムラインを見る">${d}日 <small class="mobile-dow">(${weekNames[dow]})</small></span>
+          <span class="day-number ${dowClass}" data-jump-date="${dateStr}" title="日別タイムラインを見る">${d}日</span>
           <button type="button" class="add-day-btn" data-add-date="${dateStr}" title="${dateStr} にシフトを追加">＋</button>
         </div>
         <div class="cell-shifts">

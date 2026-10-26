@@ -1287,112 +1287,16 @@ body {
     width: 100%;
   }
 
-  /* スマホ用カレンダー表示モード切替バー */
-  .mobile-calendar-mode-bar {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-bottom: 10px;
-    background: #f1f5f9;
-    padding: 5px;
-    border-radius: 8px;
-  }
-
-  .mobile-mode-label {
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--text-sub);
-    padding-left: 4px;
-    white-space: nowrap;
-  }
-
-  .mobile-cal-btn {
-    flex: 1;
-    cursor: pointer;
-    border: none;
-    background: transparent;
-    padding: 7px 8px;
-    font-size: 12px;
-    font-weight: 700;
-    border-radius: 6px;
-    color: var(--text-sub);
-  }
-
-  .mobile-cal-btn.active {
-    background: #ffffff;
-    color: var(--primary);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
-  }
-
-  /* モード1：スマホ縦リスト表示（デフォルト・横スクロール不要で見やすい） */
-  .calendar-scroll-wrapper.mobile-list-mode .calendar-weekdays {
-    display: none;
-  }
-
-  .calendar-scroll-wrapper.mobile-list-mode .calendar-cell.empty {
-    display: none;
-  }
-
-  .calendar-scroll-wrapper.mobile-list-mode .calendar-grid {
-    grid-template-columns: 1fr;
-    border-radius: 8px;
-    overflow: hidden;
-  }
-
-  .calendar-scroll-wrapper.mobile-list-mode .calendar-cell {
-    min-height: auto;
-    padding: 10px 12px;
-  }
-
-  .calendar-scroll-wrapper.mobile-list-mode .calendar-cell.no-shifts {
-    padding: 7px 12px;
-    background: #f8fafc;
-  }
-
-  .calendar-scroll-wrapper.mobile-list-mode .mobile-dow {
-    display: inline;
-  }
-
-  .calendar-scroll-wrapper.mobile-list-mode .day-number {
-    font-size: 14px;
-  }
-
-  .calendar-scroll-wrapper.mobile-list-mode .add-day-btn {
-    width: 26px;
-    height: 26px;
-    font-size: 15px;
-  }
-
-  .calendar-scroll-wrapper.mobile-list-mode .cell-shifts {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
-    gap: 6px;
-    margin-top: 4px;
-  }
-
-  .calendar-scroll-wrapper.mobile-list-mode .calendar-cell.no-shifts .cell-shifts {
-    margin-top: 0;
-  }
-
-  .calendar-scroll-wrapper.mobile-list-mode .shift-item {
-    padding: 6px 8px;
-    font-size: 12px;
-  }
-
-  .calendar-scroll-wrapper.mobile-list-mode .shift-time-text {
-    font-size: 11px;
-  }
-
-  /* モード2：7列カレンダー表示（横スワイプ対応） */
-  .calendar-scroll-wrapper.mobile-grid-mode {
+  /* 7列カレンダー表示（横スワイプ対応） */
+  .calendar-scroll-wrapper {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     border: 1px solid var(--border);
     border-radius: 8px;
   }
 
-  .calendar-scroll-wrapper.mobile-grid-mode .calendar-weekdays,
-  .calendar-scroll-wrapper.mobile-grid-mode .calendar-grid {
+  .calendar-scroll-wrapper .calendar-weekdays,
+  .calendar-scroll-wrapper .calendar-grid {
     min-width: 630px;
   }
 
